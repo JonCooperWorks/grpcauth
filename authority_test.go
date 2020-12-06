@@ -34,6 +34,7 @@ func TestDefaultPermissionsImplementation(t *testing.T) {
 	}
 }
 
+// TestNoPermissionsImplementation also tests that Authority delegates permission validation to HasPermissions when one is provided.
 func TestNoPermissionsImplementation(t *testing.T) {
 	authority := &Authority{HasPermissions: NoPermissions}
 	if !authority.isAuthorized(testPermissionedAuthResult, testTargetMethodInfo) {
