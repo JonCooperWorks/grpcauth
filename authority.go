@@ -2,6 +2,7 @@ package grpcauth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -13,12 +14,11 @@ import (
 )
 
 const (
-	errorMessageUnauthenticated = "unauthenticated"
-	authKeyName                 = "auth"
+	authKeyName = "auth"
 )
 
 var (
-	errUnauthorized = status.Errorf(codes.Unauthenticated, errorMessageUnauthenticated)
+	errUnauthorized = status.Errorf(codes.Unauthenticated, UnauthenticatedError)
 )
 
 var (
@@ -92,7 +92,19 @@ func (a *Authority) UnaryInterceptor(ctx context.Context, req interface{}, info 
 
 	if a.isAuthorized(authResult, info) {
 		a.logf("Client '%s' does not have permission to access method '%s'", authResult.ClientIdentifier, info.FullMethod)
-		return nil, status.Errorf(codes.PermissionDenied, "client '%s' does not have scope: '%s'", authResult.ClientIdentifier, info.FullMethod)
+		permissionDenied := &PermissionDeniedError{
+			ClientIdentifier:    authResult.ClientIdentifier,
+			PermissionRequested: info.FullMethod,
+			ClientPermissions:   authResult.Permissions,
+		}
+
+		b, err := json.Marshal(permissionDenied)
+		if err != nil {
+			a.logf("Error unmarshalling JSON: %v", err)
+		}
+
+		permissionDeniedJSON := string(b)
+		return nil, status.Errorf(codes.PermissionDenied, permissionDeniedJSON)
 	}
 
 	a.logf("Successfully authenticated client with identifier '%s' and permissions: %+v", authResult.ClientIdentifier, authResult.Permissions)
