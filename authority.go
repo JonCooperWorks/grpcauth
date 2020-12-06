@@ -34,6 +34,7 @@ func GetAuthResult(ctx context.Context) (*AuthResult, error) {
 		return nil, ErrUnauthenticatedContext
 	}
 
+	// Callers cannot put the auth value into the context themselves, so it's safe to panic here.
 	return v.(*AuthResult), nil
 }
 
