@@ -46,7 +46,6 @@ func TestNoPermissionsImplementation(t *testing.T) {
 }
 
 func TestGetAuthResult(t *testing.T) {
-	k := authContextKey("auth")
 	ctx := context.TODO()
 	_, err := GetAuthResult(ctx)
 	if err == nil {
@@ -57,6 +56,7 @@ func TestGetAuthResult(t *testing.T) {
 		t.Fatalf("Unexpected error type")
 	}
 
+	k := authContextKey("auth")
 	ctx = context.WithValue(ctx, k, testPermissionedAuthResult)
 	result, err := GetAuthResult(ctx)
 	if err != nil {
