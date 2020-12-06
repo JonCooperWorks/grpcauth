@@ -27,7 +27,7 @@ var (
 )
 
 // GetAuthResult is a helper function that returns the AuthResult attached to a context and returns ErrUnauthenticatedContext if none exists.
-func GetAuthResult(ctx context.Context, authKeyName string) (*AuthResult, error) {
+func GetAuthResult(ctx context.Context) (*AuthResult, error) {
 	k := authContextKey(authKeyName)
 	v := ctx.Value(k)
 	if v == nil {
