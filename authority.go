@@ -64,10 +64,10 @@ type AuthResult struct {
 	Permissions      []string
 }
 
-// Authority allows a gRPC server to determine who is sending a request and check with an AuthFunc and a
-// PermissionFunc if the client is allowed to interact with it.
-// We delegate authentication to the IsAuthenticated function so users can integrate any custom auth scheme.
-// The HasPermissions function allows users to define custom behaviour for permission strings.
+// Authority allows a gRPC server to determine who is sending a request and check with an AuthFunc and an
+// optional PermissionFunc if the client is allowed to interact with it.
+// We delegate authentication to the IsAuthenticated function so callers can integrate any auth scheme.
+// The optional HasPermissions function allows users to define custom behaviour for permission strings.
 // By default, the Authority will take the method names as permission strings in the AuthResult.
 // See cognito.go for an example.
 // We log failed authentication attempts with the error message if a Logger is passed to an Authority.
