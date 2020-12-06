@@ -28,9 +28,9 @@ const (
 	claimsUseAccess = "access"
 )
 
-// AWSCognitoClientCredentials returns a grpc.DialOption that uses the client credentials flow with AWS Cognito.
+// AWSCognitoAppClientCredentials returns a grpc.DialOption that uses the client credentials flow with AWS Cognito.
 // Callers can optionally pass the scopes they want for their client in the initial request to limit a client's privileges.
-func AWSCognitoClientCredentials(ctx context.Context, clientID, clientSecret, tokenURL string, scopes ...string) grpc.DialOption {
+func AWSCognitoAppClientCredentials(ctx context.Context, clientID, clientSecret, tokenURL string, scopes ...string) grpc.DialOption {
 	config := &clientcredentials.Config{
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
@@ -55,8 +55,8 @@ type awsJWK struct {
 	Alg string `json:"alg"`
 }
 
-// AWSCognito authenticates incoming gRPC requests from AWS Cognito App clients.
-type AWSCognito struct {
+// AWSCognitoM2M authenticates incoming gRPC requests from AWS Cognito App clients.
+type AWSCognitoM2M struct {
 	Domain        *url.URL
 	APIIdentifier string
 	JWKSURL       *url.URL
@@ -64,7 +64,7 @@ type AWSCognito struct {
 
 // AuthFunc satisfies the AuthFunc interface so clients can use AWS Cognito App clients with a gRPC Server.
 // See https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-verifying-a-jwt.html
-func (a *AWSCognito) AuthFunc(md metadata.MD) (*AuthResult, error) {
+func (a *AWSCognitoM2M) AuthFunc(md metadata.MD) (*AuthResult, error) {
 	if len(md["authorization"]) != 1 {
 		return nil, fmt.Errorf("expected JWT in 'authorization' metadata field")
 	}
@@ -121,7 +121,7 @@ func (a *AWSCognito) AuthFunc(md metadata.MD) (*AuthResult, error) {
 	}, nil
 }
 
-func (a *AWSCognito) getPemCert(token *jwt.Token) (string, error) {
+func (a *AWSCognitoM2M) getPemCert(token *jwt.Token) (string, error) {
 	var cert string
 	resp, err := http.Get(a.JWKSURL.String())
 	if err != nil {

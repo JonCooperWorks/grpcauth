@@ -17,10 +17,10 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
-// Auth0ClientCredentials returns a grpc.DialOption that adds an OAuth2 client that uses the client credentials flow.
+// Auth0M2MClientCredentials returns a grpc.DialOption that adds an OAuth2 client that uses the client credentials flow.
 // It is meant to be used with auth0's machine to machine OAuth2.
 // It optionally allows a client to specify a subset of scopes to limit privileges.
-func Auth0ClientCredentials(ctx context.Context, clientID, clientSecret, tokenURL, audience string, scopes ...string) grpc.DialOption {
+func Auth0M2MClientCredentials(ctx context.Context, clientID, clientSecret, tokenURL, audience string, scopes ...string) grpc.DialOption {
 	params := url.Values{}
 	params.Add("audience", audience)
 	config := &clientcredentials.Config{
@@ -53,17 +53,17 @@ type auth0JWK struct {
 	X5c []string `json:"x5c"`
 }
 
-// Auth0 uses auth0's Machine to Machine authentication to secure a gRPC server.
+// Auth0M2M uses auth0's Machine to Machine authentication to secure a gRPC server.
 // It validates a client's temporary access token using a user-supplied auth0 public key.
 // See https://auth0.com/machine-to-machine for more details.
-type Auth0 struct {
+type Auth0M2M struct {
 	Domain        *url.URL
 	APIIdentifier string
 	JWKSURL       *url.URL
 }
 
 // AuthFunc satisfies the AuthFunc interface so clients can use auth0 M2M with a gRPC server.
-func (a *Auth0) AuthFunc(md metadata.MD) (*AuthResult, error) {
+func (a *Auth0M2M) AuthFunc(md metadata.MD) (*AuthResult, error) {
 	if len(md["authorization"]) != 1 {
 		return nil, fmt.Errorf("expected JWT in 'authorization' metadata field")
 	}
@@ -114,7 +114,7 @@ func (a *Auth0) AuthFunc(md metadata.MD) (*AuthResult, error) {
 	}, nil
 }
 
-func (a *Auth0) getPemCert(token *jwt.Token) (string, error) {
+func (a *Auth0M2M) getPemCert(token *jwt.Token) (string, error) {
 	var cert string
 	resp, err := http.Get(a.JWKSURL.String())
 	if err != nil {
