@@ -139,10 +139,6 @@ func (a *authority) authenticateAndAuthorizeContext(ctx context.Context, methodN
 		return nil, errUnauthorized
 	}
 
-	// Insert auth result into the context so handlers can determine which client is performing an action.
-	authKey := authContextKey(authKeyName)
-	ctx = context.WithValue(ctx, authKey, authResult)
-
 	if !a.HasPermissions(authResult.Permissions, methodName) {
 		permissionDenied := &PermissionDeniedError{
 			ClientIdentifier:    authResult.ClientIdentifier,
@@ -155,6 +151,9 @@ func (a *authority) authenticateAndAuthorizeContext(ctx context.Context, methodN
 		return nil, status.Errorf(codes.PermissionDenied, permissionDeniedJSON)
 	}
 
+	// Insert auth result into the context so handlers can determine which client is performing an action.
+	authKey := authContextKey(authKeyName)
+	ctx = context.WithValue(ctx, authKey, authResult)
 	return ctx, nil
 }
 
