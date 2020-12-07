@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -26,9 +25,6 @@ var (
 	testUnpermissionedAuthResult = &AuthResult{
 		ClientIdentifier: testClientName,
 		Permissions:      []string{},
-	}
-	testTargetMethodInfo = &grpc.UnaryServerInfo{
-		FullMethod: targetMethodName,
 	}
 )
 
