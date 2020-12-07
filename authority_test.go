@@ -127,6 +127,28 @@ func TestContextWithCorrectPermissionsAccepted(t *testing.T) {
 	}
 }
 
+func TextContextNoPermissionsWorksAsExpected(t *testing.T) {
+	authority := &authority{
+		IsAuthenticated: alwaysAuthenticatedNoPermissions,
+		HasPermissions:  NoPermissions,
+	}
+	md := metadata.Pairs("authorization", "bearer words")
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+	ctx, err := authority.authenticateAndAuthorizeContext(ctx, targetMethodName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	authResult, err := GetAuthResult(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if authResult.ClientIdentifier != testClientName {
+		t.Fatalf("invalid client name, expected %v got %v", testClientName, authResult.ClientIdentifier)
+	}
+}
+
 func TestContextWithIncorrectPermissionsRejected(t *testing.T) {
 	authority := &authority{
 		IsAuthenticated: alwaysAuthenticatedNoPermissions,
