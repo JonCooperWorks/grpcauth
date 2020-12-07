@@ -25,11 +25,11 @@ var (
 
 func TestDefaultPermissionsImplementation(t *testing.T) {
 	authority := &Authority{}
-	if !authority.isAuthorized(testPermissionedAuthResult, testTargetMethodInfo) {
+	if !authority.isAuthorized(testPermissionedAuthResult, testTargetMethodInfo.FullMethod) {
 		t.Fatalf("Expected client to be authorized to access gRPC method")
 	}
 
-	if authority.isAuthorized(testUnpermissionedAuthResult, testTargetMethodInfo) {
+	if authority.isAuthorized(testUnpermissionedAuthResult, testTargetMethodInfo.FullMethod) {
 		t.Fatalf("Expected client not to be authorized")
 	}
 }
@@ -37,11 +37,11 @@ func TestDefaultPermissionsImplementation(t *testing.T) {
 // TestNoPermissionsImplementation also tests that Authority delegates permission validation to HasPermissions when one is provided.
 func TestNoPermissionsImplementation(t *testing.T) {
 	authority := &Authority{HasPermissions: NoPermissions}
-	if !authority.isAuthorized(testPermissionedAuthResult, testTargetMethodInfo) {
+	if !authority.isAuthorized(testPermissionedAuthResult, testTargetMethodInfo.FullMethod) {
 		t.Fatalf("Expected client to be authorized to access gRPC method")
 	}
 
-	if !authority.isAuthorized(testUnpermissionedAuthResult, testTargetMethodInfo) {
+	if !authority.isAuthorized(testUnpermissionedAuthResult, testTargetMethodInfo.FullMethod) {
 		t.Fatalf("Expected client to be authorized")
 	}
 }

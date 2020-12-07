@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -47,11 +48,11 @@ type AuthFunc func(md metadata.MD) (*AuthResult, error)
 // PermissionFunc determines if an authenticated client is authorized to access a particular gRPC method.
 // It allows users to override the default permission behaviour that requires a permission with the full gRPC
 // method name be sent over during authentication.
-type PermissionFunc func(permissions []string, info *grpc.UnaryServerInfo) bool
+type PermissionFunc func(permissions []string, methodnName string) bool
 
 // NoPermissions permits a gRPC client unlimited access to all methods on the server.
 // It allows for servers that grant authenticated clients access to all methods on a gRPC server.
-func NoPermissions(permissions []string, info *grpc.UnaryServerInfo) bool {
+func NoPermissions(permissions []string, methodName string) bool {
 	return true
 }
 
@@ -74,12 +75,33 @@ type AuthResult struct {
 // We log failed authentication attempts with the error message if a Logger is passed to an Authority.
 type Authority struct {
 	IsAuthenticated func(md metadata.MD) (*AuthResult, error)
-	HasPermissions  func(permissions []string, info *grpc.UnaryServerInfo) bool
+	HasPermissions  func(permissions []string, methodName string) bool
 	Logger          *log.Logger
 }
 
-// UnaryInterceptor ensures a request is authenticated based on its metadata before invoking the server handler.
-func (a *Authority) UnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+// UnaryServerInterceptor ensures a request is authenticated based on its metadata before invoking the server handler.
+func (a *Authority) UnaryServerInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	ctx, err := a.authenticateAndAuthorizeContext(ctx, info.FullMethod)
+	if err != nil {
+		return nil, err
+	}
+
+	return handler(ctx, req)
+}
+
+// StreamServerInterceptor authenticates stream requests.
+func (a *Authority) StreamServerInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+	ctx, err := a.authenticateAndAuthorizeContext(stream.Context(), info.FullMethod)
+	if err != nil {
+		return err
+	}
+
+	wrapped := grpc_middleware.WrapServerStream(stream)
+	wrapped.WrappedContext = ctx
+	return handler(srv, wrapped)
+}
+
+func (a *Authority) authenticateAndAuthorizeContext(ctx context.Context, methodName string) (context.Context, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, errUnauthorized
@@ -90,12 +112,16 @@ func (a *Authority) UnaryInterceptor(ctx context.Context, req interface{}, info 
 		a.logf("Error authorizing user: %v", err)
 		return nil, errUnauthorized
 	}
+	a.logf("Successfully authenticated client with identifier '%s' and permissions: %+v", authResult.ClientIdentifier, authResult.Permissions)
+	// Insert auth result into the context so handlers can determine which client is performing an action.
+	authKey := authContextKey(authKeyName)
+	ctx = context.WithValue(ctx, authKey, authResult)
 
-	if a.isAuthorized(authResult, info) {
-		a.logf("Client '%s' does not have permission to access method '%s'", authResult.ClientIdentifier, info.FullMethod)
+	if a.isAuthorized(authResult, methodName) {
+		a.logf("Client '%s' does not have permission to access method '%s'", authResult.ClientIdentifier, methodName)
 		permissionDenied := &PermissionDeniedError{
 			ClientIdentifier:    authResult.ClientIdentifier,
-			PermissionRequested: info.FullMethod,
+			PermissionRequested: methodName,
 			ClientPermissions:   authResult.Permissions,
 		}
 
@@ -108,12 +134,7 @@ func (a *Authority) UnaryInterceptor(ctx context.Context, req interface{}, info 
 		return nil, status.Errorf(codes.PermissionDenied, permissionDeniedJSON)
 	}
 
-	a.logf("Successfully authenticated client with identifier '%s' and permissions: %+v", authResult.ClientIdentifier, authResult.Permissions)
-
-	// Insert auth result into the context so handlers can determine which client is performing an action.
-	authKey := authContextKey(authKeyName)
-	ctx = context.WithValue(ctx, authKey, authResult)
-	return handler(ctx, req)
+	return ctx, nil
 }
 
 func (a *Authority) logf(format string, args ...interface{}) {
@@ -122,16 +143,16 @@ func (a *Authority) logf(format string, args ...interface{}) {
 	}
 }
 
-func (a *Authority) isAuthorized(user *AuthResult, info *grpc.UnaryServerInfo) bool {
+func (a *Authority) isAuthorized(user *AuthResult, methodName string) bool {
 	if a.HasPermissions == nil {
-		return defaultHasPermissions(user.Permissions, info)
+		return defaultHasPermissions(user.Permissions, methodName)
 	}
-	return a.HasPermissions(user.Permissions, info)
+	return a.HasPermissions(user.Permissions, methodName)
 }
 
-func defaultHasPermissions(permissions []string, info *grpc.UnaryServerInfo) bool {
+func defaultHasPermissions(permissions []string, methodName string) bool {
 	for _, permission := range permissions {
-		if permission == info.FullMethod {
+		if permission == methodName {
 			return true
 		}
 	}
