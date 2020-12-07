@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"time"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
@@ -73,14 +72,31 @@ type AuthResult struct {
 // By default, the Authority will take the method names as permission strings in the AuthResult.
 // See cognito.go for an example.
 // We log failed authentication attempts with the error message if a Logger is passed to an Authority.
-type Authority struct {
+type Authority interface {
+	UnaryServerInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error)
+	StreamServerInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error
+}
+
+// NewAuthority returns a an Authority provisioned with the authFunc and optionally a permissionFunc.
+// If you wish to use the default permission behaviour, pass a nil permissionFunc.
+func NewAuthority(authFunc AuthFunc, permissionFunc PermissionFunc) Authority {
+	if authFunc == nil {
+		panic("authFunc cannot be nil")
+	}
+
+	return &authority{
+		IsAuthenticated: authFunc,
+		HasPermissions:  permissionFunc,
+	}
+}
+
+type authority struct {
 	IsAuthenticated func(md metadata.MD) (*AuthResult, error)
 	HasPermissions  func(permissions []string, methodName string) bool
-	Logger          *log.Logger
 }
 
 // UnaryServerInterceptor ensures a request is authenticated based on its metadata before invoking the server handler.
-func (a *Authority) UnaryServerInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+func (a *authority) UnaryServerInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
 	ctx, err := a.authenticateAndAuthorizeContext(ctx, info.FullMethod)
 	if err != nil {
 		return nil, err
@@ -90,7 +106,7 @@ func (a *Authority) UnaryServerInterceptor(ctx context.Context, req interface{},
 }
 
 // StreamServerInterceptor authenticates stream requests.
-func (a *Authority) StreamServerInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+func (a *authority) StreamServerInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
 	ctx, err := a.authenticateAndAuthorizeContext(stream.Context(), info.FullMethod)
 	if err != nil {
 		return err
@@ -101,7 +117,7 @@ func (a *Authority) StreamServerInterceptor(srv interface{}, stream grpc.ServerS
 	return handler(srv, wrapped)
 }
 
-func (a *Authority) authenticateAndAuthorizeContext(ctx context.Context, methodName string) (context.Context, error) {
+func (a *authority) authenticateAndAuthorizeContext(ctx context.Context, methodName string) (context.Context, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, errUnauthorized
@@ -109,27 +125,21 @@ func (a *Authority) authenticateAndAuthorizeContext(ctx context.Context, methodN
 
 	authResult, err := a.IsAuthenticated(md)
 	if err != nil {
-		a.logf("Error authorizing user: %v", err)
 		return nil, errUnauthorized
 	}
-	a.logf("Successfully authenticated client with identifier '%s' and permissions: %+v", authResult.ClientIdentifier, authResult.Permissions)
+
 	// Insert auth result into the context so handlers can determine which client is performing an action.
 	authKey := authContextKey(authKeyName)
 	ctx = context.WithValue(ctx, authKey, authResult)
 
 	if a.isAuthorized(authResult, methodName) {
-		a.logf("Client '%s' does not have permission to access method '%s'", authResult.ClientIdentifier, methodName)
 		permissionDenied := &PermissionDeniedError{
 			ClientIdentifier:    authResult.ClientIdentifier,
 			PermissionRequested: methodName,
 			ClientPermissions:   authResult.Permissions,
 		}
 
-		b, err := json.Marshal(permissionDenied)
-		if err != nil {
-			a.logf("Error unmarshalling JSON: %v", err)
-		}
-
+		b, _ := json.Marshal(permissionDenied)
 		permissionDeniedJSON := string(b)
 		return nil, status.Errorf(codes.PermissionDenied, permissionDeniedJSON)
 	}
@@ -137,13 +147,7 @@ func (a *Authority) authenticateAndAuthorizeContext(ctx context.Context, methodN
 	return ctx, nil
 }
 
-func (a *Authority) logf(format string, args ...interface{}) {
-	if a.Logger != nil {
-		a.Logger.Printf(format, args...)
-	}
-}
-
-func (a *Authority) isAuthorized(user *AuthResult, methodName string) bool {
+func (a *authority) isAuthorized(user *AuthResult, methodName string) bool {
 	if a.HasPermissions == nil {
 		return defaultHasPermissions(user.Permissions, methodName)
 	}
