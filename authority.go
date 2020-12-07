@@ -126,6 +126,10 @@ func (a *authority) authenticateAndAuthorizeContext(ctx context.Context, methodN
 		return nil, errUnauthorized
 	}
 
+	if !validateIncomingMetadata(md) {
+		return nil, errUnauthorized
+	}
+
 	authResult, err := a.IsAuthenticated(md)
 	if err != nil {
 		return nil, errUnauthorized
@@ -135,7 +139,7 @@ func (a *authority) authenticateAndAuthorizeContext(ctx context.Context, methodN
 	authKey := authContextKey(authKeyName)
 	ctx = context.WithValue(ctx, authKey, authResult)
 
-	if a.isAuthorized(authResult, methodName) {
+	if !a.isAuthorized(authResult, methodName) {
 		permissionDenied := &PermissionDeniedError{
 			ClientIdentifier:    authResult.ClientIdentifier,
 			PermissionRequested: methodName,
@@ -155,6 +159,14 @@ func (a *authority) isAuthorized(user *AuthResult, methodName string) bool {
 		return defaultHasPermissions(user.Permissions, methodName)
 	}
 	return a.HasPermissions(user.Permissions, methodName)
+}
+
+func validateIncomingMetadata(md metadata.MD) bool {
+	if len(md.Get("authorization")) != 1 {
+		return false
+	}
+
+	return true
 }
 
 func defaultHasPermissions(permissions []string, methodName string) bool {

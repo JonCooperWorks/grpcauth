@@ -5,21 +5,30 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+)
+
+const (
+	targetMethodName = "/server.ServiceName/MethodName"
+	testClientName   = "testClient"
 )
 
 var (
 	testPermissionedAuthResult = &AuthResult{
-		ClientIdentifier: "testClient",
-		Permissions:      []string{"/server.ServiceName/MethodName"},
+		ClientIdentifier: testClientName,
+		Permissions:      []string{targetMethodName},
 	}
 	testUnpermissionedAuthResult = &AuthResult{
-		ClientIdentifier: "testClient",
+		ClientIdentifier: testClientName,
 		Permissions:      []string{},
 	}
 	testTargetMethodInfo = &grpc.UnaryServerInfo{
-		FullMethod: "/server.ServiceName/MethodName",
+		FullMethod: targetMethodName,
 	}
 )
 
@@ -67,4 +76,98 @@ func TestGetAuthResult(t *testing.T) {
 	if !reflect.DeepEqual(result, testPermissionedAuthResult) {
 		t.Fatalf("Expected %+v, got %+v", testPermissionedAuthResult, result)
 	}
+}
+
+func TestAuthenticateAndAuthorizeRejectsInvalidContextByDefault(t *testing.T) {
+	ctxNoMetadata := context.TODO()
+	md := metadata.Pairs("header", "notauth")
+	ctxNoAuthHeader := metadata.NewIncomingContext(context.Background(), md)
+	ctxs := []context.Context{
+		ctxNoMetadata,
+		ctxNoAuthHeader,
+	}
+
+	authority := &authority{}
+	for _, ctx := range ctxs {
+		_, err := authority.authenticateAndAuthorizeContext(ctx, targetMethodName)
+		if err == nil {
+			t.Fatalf("expected error with invalid context")
+		}
+
+		st, ok := status.FromError(err)
+		if !ok {
+			t.Fatalf("authenticateAndAuthorizeContext must return a gRPC status for all errors")
+		}
+
+		if st.Code() != codes.Unauthenticated {
+			t.Fatalf("expected unauthenticated, got %v", st.Code())
+		}
+
+		if st.Message() != UnauthenticatedError {
+			t.Fatalf("expected unauthenticated error, got %v", st.Message())
+		}
+	}
+}
+
+func TestAuthorityRejectsFailedAuthAttempts(t *testing.T) {
+	authority := &authority{IsAuthenticated: alwaysUnauthenticated}
+
+	md := metadata.Pairs("authorization", "bearer words")
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+	ctx, err := authority.authenticateAndAuthorizeContext(ctx, targetMethodName)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("authenticateAndAuthorizeContext must return a gRPC status for all errors")
+	}
+
+	if st.Code() != codes.Unauthenticated {
+		t.Fatalf("expected unauthenticated, got %v", st.Code())
+	}
+
+	if st.Message() != UnauthenticatedError {
+		t.Fatalf("expected unauthenticated error, got %v", st.Message())
+	}
+}
+
+func TestContextWithCorrectPermissionsAccepted(t *testing.T) {
+	authority := &authority{IsAuthenticated: alwaysAuthenticatedAllPermissions}
+
+	md := metadata.Pairs("authorization", "bearer words")
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+	ctx, err := authority.authenticateAndAuthorizeContext(ctx, targetMethodName)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	authResult, err := GetAuthResult(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if authResult.ClientIdentifier != testClientName {
+		t.Fatalf("invalid client name, expected %v got %v", testClientName, authResult.ClientIdentifier)
+	}
+}
+
+func alwaysAuthenticatedAllPermissions(md metadata.MD) (*AuthResult, error) {
+	return &AuthResult{
+		ClientIdentifier: testClientName,
+		Timestamp:        time.Now(),
+		Permissions:      []string{targetMethodName},
+	}, nil
+}
+
+func alwaysAuthenticatedNoPermissions(md metadata.MD) (*AuthResult, error) {
+	return &AuthResult{
+		ClientIdentifier: testClientName,
+		Timestamp:        time.Now(),
+		Permissions:      []string{targetMethodName},
+	}, nil
+}
+
+func alwaysUnauthenticated(md metadata.MD) (*AuthResult, error) {
+	return nil, errors.New("unauthenticated")
 }
