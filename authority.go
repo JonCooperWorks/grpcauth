@@ -58,7 +58,9 @@ func NoPermissions(permissions []string, methodName string) bool {
 // authContextKey is a key for values injected into the context by an Authority's UnaryInterceptor.
 type authContextKey string
 
-// AuthResult is the result of authenticating a user.
+// AuthResult is the result of authenticating a gRPC client.
+// AuthFuncs should put an identifier, timestamp when the client authenticated
+// and its permissions when returning an AuthResult.
 type AuthResult struct {
 	ClientIdentifier string
 	Timestamp        time.Time
