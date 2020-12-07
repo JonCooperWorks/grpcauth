@@ -87,6 +87,10 @@ func NewAuthority(authFunc AuthFunc, permissionFunc PermissionFunc) Authority {
 		panic("authFunc cannot be nil")
 	}
 
+	if permissionFunc == nil {
+		permissionFunc = defaultHasPermissions
+	}
+
 	return &authority{
 		IsAuthenticated: authFunc,
 		HasPermissions:  permissionFunc,
@@ -139,7 +143,7 @@ func (a *authority) authenticateAndAuthorizeContext(ctx context.Context, methodN
 	authKey := authContextKey(authKeyName)
 	ctx = context.WithValue(ctx, authKey, authResult)
 
-	if !a.isAuthorized(authResult, methodName) {
+	if !a.HasPermissions(authResult.Permissions, methodName) {
 		permissionDenied := &PermissionDeniedError{
 			ClientIdentifier:    authResult.ClientIdentifier,
 			PermissionRequested: methodName,
@@ -152,13 +156,6 @@ func (a *authority) authenticateAndAuthorizeContext(ctx context.Context, methodN
 	}
 
 	return ctx, nil
-}
-
-func (a *authority) isAuthorized(user *AuthResult, methodName string) bool {
-	if a.HasPermissions == nil {
-		return defaultHasPermissions(user.Permissions, methodName)
-	}
-	return a.HasPermissions(user.Permissions, methodName)
 }
 
 func validateIncomingMetadata(md metadata.MD) bool {

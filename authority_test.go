@@ -32,29 +32,6 @@ var (
 	}
 )
 
-func TestDefaultPermissionsImplementation(t *testing.T) {
-	authority := &authority{}
-	if !authority.isAuthorized(testPermissionedAuthResult, testTargetMethodInfo.FullMethod) {
-		t.Fatalf("Expected client to be authorized to access gRPC method")
-	}
-
-	if authority.isAuthorized(testUnpermissionedAuthResult, testTargetMethodInfo.FullMethod) {
-		t.Fatalf("Expected client not to be authorized")
-	}
-}
-
-// TestNoPermissionsImplementation also tests that Authority delegates permission validation to HasPermissions when one is provided.
-func TestNoPermissionsImplementation(t *testing.T) {
-	authority := &authority{HasPermissions: NoPermissions}
-	if !authority.isAuthorized(testPermissionedAuthResult, testTargetMethodInfo.FullMethod) {
-		t.Fatalf("Expected client to be authorized to access gRPC method")
-	}
-
-	if !authority.isAuthorized(testUnpermissionedAuthResult, testTargetMethodInfo.FullMethod) {
-		t.Fatalf("Expected client to be authorized")
-	}
-}
-
 func TestGetAuthResult(t *testing.T) {
 	ctx := context.TODO()
 	_, err := GetAuthResult(ctx)
@@ -133,8 +110,10 @@ func TestAuthorityRejectsFailedAuthAttempts(t *testing.T) {
 }
 
 func TestContextWithCorrectPermissionsAccepted(t *testing.T) {
-	authority := &authority{IsAuthenticated: alwaysAuthenticatedAllPermissions}
-
+	authority := &authority{
+		IsAuthenticated: alwaysAuthenticatedAllPermissions,
+		HasPermissions:  defaultHasPermissions,
+	}
 	md := metadata.Pairs("authorization", "bearer words")
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 	ctx, err := authority.authenticateAndAuthorizeContext(ctx, targetMethodName)
@@ -152,6 +131,30 @@ func TestContextWithCorrectPermissionsAccepted(t *testing.T) {
 	}
 }
 
+func TestContextWithIncorrectPermissionsRejected(t *testing.T) {
+	authority := &authority{
+		IsAuthenticated: alwaysAuthenticatedNoPermissions,
+		HasPermissions:  defaultHasPermissions,
+	}
+
+	md := metadata.Pairs("authorization", "bearer words")
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+	ctx, err := authority.authenticateAndAuthorizeContext(ctx, targetMethodName)
+	if err == nil {
+		t.Fatalf("expected error")
+	}
+
+	st, ok := status.FromError(err)
+	if !ok {
+		t.Fatalf("authenticateAndAuthorizeContext must return a gRPC status for all errors")
+	}
+
+	if st.Code() != codes.PermissionDenied {
+		t.Fatalf("expected PermissionDenied, got %v", st.Code())
+	}
+
+}
+
 func alwaysAuthenticatedAllPermissions(md metadata.MD) (*AuthResult, error) {
 	return &AuthResult{
 		ClientIdentifier: testClientName,
@@ -164,7 +167,6 @@ func alwaysAuthenticatedNoPermissions(md metadata.MD) (*AuthResult, error) {
 	return &AuthResult{
 		ClientIdentifier: testClientName,
 		Timestamp:        time.Now(),
-		Permissions:      []string{targetMethodName},
 	}, nil
 }
 
