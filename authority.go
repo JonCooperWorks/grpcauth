@@ -49,9 +49,13 @@ type AuthFunc func(md metadata.MD) (*AuthResult, error)
 // method name be sent over during authentication.
 type PermissionFunc func(permissions []string, methodName string) bool
 
-// NoPermissions permits a gRPC client unlimited access to all methods on the server.
+// NoPermissions permits a gRPC client unlimited access to all methods on the server as long as they have no permissions.
 // It allows for servers that grant authenticated clients access to all methods on a gRPC server.
+// It will fail if a client has permissions.
 func NoPermissions(permissions []string, methodName string) bool {
+	if len(permissions) != 0 {
+		return false
+	}
 	return true
 }
 
