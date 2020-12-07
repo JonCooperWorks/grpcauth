@@ -7,23 +7,9 @@ It comes with helpers for [auth0 Machine to Machine](https://auth0.com/machine-t
 ## Concepts
 
 ### Authority
-`github.com/joncooperworks/grpcauth` is centered around the `grpcauth.Authority` struct.
+`github.com/joncooperworks/grpcauth` is centered around the `grpcauth.Authority` interface.
 
-
-```
-// Authority allows a gRPC server to determine who is sending a request with an AuthFunc and check with a PermissionFunc if the client is allowed to interact with it.
-// We delegate authentication to the IsAuthenticated function so users can integrate any custom auth scheme.
-// The HasPermissions function allows users to define custom behaviour for permission strings.
-// By default, the Authority will take the method names as permission strings in the AuthResult.
-// See cognito.go for an example.
-// We log failed authentication attempts with the error message if a Logger is passed to an Authority.
-type Authority struct {
-	IsAuthenticated func(md metadata.MD) (*AuthResult, error)
-	HasPermissions  func(permissions []string, info *grpc.UnaryServerInfo) bool
-	Logger          *log.Logger
-}
-
-```
+\
 
 An Authority delegates authentication to a `grpcauth.AuthFunc` and authorization to a `grpcauth.PermissionFunc` to determine if a gRPC client is allowed to access a particular method on the server.
 By default, the Authority expects the authenticated entity to have permissions that match the full names of the gRPC methods they intend to call.

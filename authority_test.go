@@ -149,6 +149,11 @@ func TestContextWithIncorrectPermissionsRejected(t *testing.T) {
 		t.Fatalf("expected PermissionDenied, got %v", st.Code())
 	}
 
+	const expectedMessage = `{"clientIdentifier":"testClient","permissionRequested":"/server.ServiceName/MethodName","clientPermissions":null}`
+	if st.Message() != expectedMessage {
+		t.Fatalf("expected %v, got %v", expectedMessage, st.Message())
+	}
+
 }
 
 func alwaysAuthenticatedAllPermissions(md metadata.MD) (*AuthResult, error) {
