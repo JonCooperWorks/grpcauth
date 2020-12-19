@@ -74,17 +74,22 @@ type AuthResult struct {
 
 // Authority allows a gRPC server to determine who is sending a request and check with an AuthFunc and an
 // optional PermissionFunc if the client is allowed to interact with it.
-// We delegate authentication to the IsAuthenticated function so callers can integrate any auth scheme.
-// The optional HasPermissions function allows users to define custom behaviour for permission strings.
+// We delegate authentication to the AuthFunc function so callers can integrate any auth scheme.
+// The optional PermissionFunc function allows users to define custom behaviour for permission strings.
 // By default, the Authority will take the method names as permission strings in the AuthResult.
 // See cognito.go for an example.
-// We log failed authentication attempts with the error message if a Logger is passed to an Authority.
 type Authority interface {
 	UnaryServerInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error)
 	StreamServerInterceptor(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error
 }
 
 // NewAuthority returns a an Authority provisioned with the authFunc and optionally a permissionFunc.
+// Authority allows a gRPC server to determine who is sending a request and check with an AuthFunc and an
+// optional PermissionFunc if the client is allowed to interact with it.
+// We delegate authentication to the authFunc function so callers can integrate any auth scheme.
+// The optional permissionFunc function allows users to define custom behaviour for permission strings.
+// By default, the Authority will take the method names as permission strings in the AuthResult.
+// See cognito.go for an example.
 // If you wish to use the default permission behaviour, pass a nil permissionFunc.
 func NewAuthority(authFunc AuthFunc, permissionFunc PermissionFunc) Authority {
 	if authFunc == nil {

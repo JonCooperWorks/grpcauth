@@ -7,28 +7,31 @@ It comes with helpers for [auth0 Machine to Machine](https://auth0.com/machine-t
 ## Concepts
 
 ### Authority
-`github.com/joncooperworks/grpcauth` is centered around the `grpcauth.Authority` interface.
-
-\
-
-An Authority delegates authentication to a `grpcauth.AuthFunc` and authorization to a `grpcauth.PermissionFunc` to determine if a gRPC client is allowed to access a particular method on the server.
-By default, the Authority expects the authenticated entity to have permissions that match the full names of the gRPC methods they intend to call.
+An `Authority` allows a gRPC server to determine who is sending a request and check with an `AuthFunc` and an  optional `PermissionFunc` to determine if the authenticated client is allowed to interact with a particular gRPC method.
+The `AuthFunc` allows callers can integrate any auth scheme.
+By default, the Authority will take the method names as permission strings in the AuthResult.
+See [cognito.go](./cognito.go) for an example.
 
 ### AuthFunc
+```
+// AuthFunc validates a gRPC request's metadata based on some arbitrary criteria.
+// It's meant to allow integration with a custom auth scheme.
+// Implementations should return error if authentication failed.
+// See auth0.go and cognito.go.
+type AuthFunc func(md metadata.MD) (*AuthResult, error)
+```
 
 ### PermissionFunc
-
-## OAuth2
+```
+// PermissionFunc determines if an authenticated client is authorized to access a particular gRPC method.
+// It allows users to override the default permission behaviour that requires a permission with the full gRPC
+// method name be sent over during authentication.
+type PermissionFunc func(permissions []string, methodName string) bool
+```
 
 ### Client Credentials Grant Type
 `github.com/joncooperworks/grpcauth` has Client Credentials flow helpers for [auth0](https://auth0.com/machine-to-machine) and [AWS Cognito](https://aws.amazon.com/cognito/).
 
-#### AWS Cognito
-
-#### Auth0
-
 ## Other OAuth2
 go-gRPC natively supports using an `oauth2.TokenSource` as a `grpc.DialOption` allowing any OpenID provider to be used to authenticate.
 Simply implement an `AuthFunc` and optionally a `PermissionFunc` if you need custom permissions behaviour.
-
-## Other Auth Schemes
