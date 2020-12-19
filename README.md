@@ -1,4 +1,4 @@
-# grpcauth
+# gRPCAuth
 `github.com/joncooperworks/grpcauth` is a set of tested helpers for servers that authenticate clients using gRPC metadata using gRPC interceptors.
 It supports permission based authentication, allowing users to limit a client's access to endpoints via permissions based on gRPC method names.
 I use it in [wgrpcd](https://github.com/joncooperworks/wgrpcd) to authenticate `wgrpcd` clients and [wireguardhttps](https://github.com/joncooperworks/wireguardhttps) to authenticate against the `wgrpcd` instance.
@@ -13,19 +13,20 @@ By default, the Authority will take the method names as permission strings in th
 See [cognito.go](./cognito.go) for an example.
 
 ### AuthFunc
+An `AuthFunc` validates a gRPC request's metadata based on some arbitrary criteria.
+It's meant to allow integration with a custom auth scheme.
+Implementations should return error if authentication failed.
+See [auth0.go](./auth0.go) and [cognito.go](./cognito.go) for examples.
 ```
-// AuthFunc validates a gRPC request's metadata based on some arbitrary criteria.
-// It's meant to allow integration with a custom auth scheme.
-// Implementations should return error if authentication failed.
-// See auth0.go and cognito.go.
 type AuthFunc func(md metadata.MD) (*AuthResult, error)
 ```
 
 ### PermissionFunc
+A `PermissionFunc` determines if an authenticated client is authorized to access a particular gRPC method.
+It allows users to override the default permission behaviour that requires a permission with the full gRPC
+method name be sent over during authentication.
+See [permissions.go](./permissions.go) for an example.
 ```
-// PermissionFunc determines if an authenticated client is authorized to access a particular gRPC method.
-// It allows users to override the default permission behaviour that requires a permission with the full gRPC
-// method name be sent over during authentication.
 type PermissionFunc func(permissions []string, methodName string) bool
 ```
 
